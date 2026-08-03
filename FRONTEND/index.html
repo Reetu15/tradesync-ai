@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TradeSync AI - Smart Gov Portal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; margin: 0; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    @keyframes spin-slow { 100% { transform: rotate(360deg); } }
+    .animate-spin-slow { animation: spin-slow 4s linear infinite; }
+    @keyframes slide-up-fade { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
+    .animate-slide-up { animation: slide-up-fade 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    @keyframes pop-in { 0% { opacity: 0; transform: scale(0.8); } 70% { transform: scale(1.05); } 100% { opacity: 1; transform: scale(1); } }
+    .animate-pop { animation: pop-in 0.5s ease-out forwards; }
+    @keyframes glow-pulse { 0%, 100% { filter: drop-shadow(0 0 15px rgba(249,115,22,0.4)); transform: scale(1); } 50% { filter: drop-shadow(0 0 35px rgba(249,115,22,0.8)); transform: scale(1.05); } }
+    .animate-glow { animation: glow-pulse 2s ease-in-out infinite; }
+    @keyframes width-grow { 0% { width: 0%; opacity: 0; } 100% { width: 100%; opacity: 1; } }
+    .animate-width { animation: width-grow 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+  </style>
+</head>
+<body class="text-slate-800">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+    
+    // Explicitly target the new local backend port 8080
+    const API_URL = "http://127.0.0.1:8080"; 
+
+    const ModernLogo = ({ className }) => (
+      <svg className={className} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M50 5 L90 25 L90 75 L50 95 L10 75 L10 25 Z" fill="#022c22"/>
+        <path d="M50 12 L84 29 L84 71 L50 88 L16 71 L16 29 Z" fill="#ffffff"/>
+        <path d="M50 12 L84 29 L50 48 L16 29 Z" fill="#f97316"/> 
+        <path d="M16 29 L50 48 L50 88 L16 71 Z" fill="#f1f5f9"/> 
+        <path d="M84 29 L50 48 L50 88 L84 71 Z" fill="#10b981"/> 
+        <circle cx="50" cy="48" r="10" fill="#1e3a8a"/> 
+        <path d="M46 48 L49 51 L55 44" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    );
+
+    function App() {
+      const [currentUser, setCurrentUser] = useState(null);
+      const [viewState, setViewState] = useState('splash');
+      
+      const [summaryData, setSummaryData] = useState(null);
+      const [outcomes, setOutcomes] = useState([]);
+      const [allTasks, setAllTasks] = useState([]);
+      const [allUsers, setAllUsers] = useState([]); 
+      const [logs, setLogs] = useState([]);
+
+      const fetchData = async () => {
+        if (!currentUser) return;
+        try {
+          const sumRes = await fetch(`${API_URL}/api/data/summary`);
+          if (sumRes.ok) setSummaryData(await sumRes.json());
+          
+          const outRes = await fetch(`${API_URL}/api/data/outcomes`);
+          if (outRes.ok) setOutcomes(await outRes.json() || []);
+          
+          const usrRes = await fetch(`${API_URL}/api/data/users`);
+          if (usrRes.ok) setAllUsers(await usrRes.json() || []);
+
+          const taskRes = await fetch(`${API_URL}/api/data/tasks`);
+          if (taskRes.ok) setAllTasks(await taskRes.json() || []);
+        } catch (err) { console.error("Backend error", err); }
+      };
+
+      useEffect(() => { fetchData(); }, [currentUser, viewState]);
+
+      const handleLogin = async (email, password) => {
+        try {
+          const res = await fetch(`${API_URL}/api/auth/login`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setCurrentUser(data.user);
+            setViewState('loading'); setTimeout(() => setViewState('dashboard'), 2000); 
+          } else { alert("Invalid credentials."); }
+        } catch(err) { alert("Backend offline. Make sure you ran the Python file!"); }
+      };
+
+      const handleSignup = async (name, email, username, password, role) => {
+        try {
+          const res = await fetch(`${API_URL}/api/auth/signup`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, email, username, password, role })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setCurrentUser(data.user);
+            setViewState('success'); setTimeout(() => { setViewState('loading'); setTimeout(() => setViewState('dashboard'), 2000); }, 1500);
+          } else {
+            const errData = await res.json(); alert(errData.detail || "Registration failed!");
+          }
+        } catch(err) { alert("Backend offline. Make sure you ran the Python file!"); }
+      };
+
+      const handleLogout = () => { setCurrentUser(null); setViewState('login'); };
+
+      if (viewState === 'splash') return <SplashScreen onComplete={() => setViewState('login')} />;
+      if (viewState === 'login') return <LoginScreen onLogin={handleLogin} onGoSignup={() => setViewState('signup')} onGoForgot={() => setViewState('forgot')} />;
+      if (viewState === 'signup') return <SignupScreen onSignup={handleSignup} onGoLogin={() => setViewState('login')} />;
+      if (viewState === 'forgot') return <ForgotPasswordScreen onGoLogin={() => setViewState('login')} API_URL={API_URL} />;
+      if (viewState === 'success') return <RegistrationSuccess user={currentUser} />;
+      if (viewState === 'loading') return <LoadingScreen user={currentUser} />;
+      
+      return <Dashboard user={currentUser} users={allUsers} onLogout={handleLogout} summaryData={summaryData} outcomes={outcomes} allTasks={allTasks} logs={logs} setLogs={setLogs} refreshData={fetchData} API_URL={API_URL} />;
+    }
+
+    const SplashScreen = ({ onComplete }) => {
+      useEffect(() => { const timer = setTimeout(onComplete, 3000); return () => clearTimeout(timer); }, [onComplete]);
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-emerald-950 relative overflow-hidden">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[150vw] h-[150vw] bg-orange-500 opacity-[0.03] rounded-full blur-3xl animate-pulse"></div>
+          <div className="z-10 flex flex-col items-center">
+            <ModernLogo className="w-32 h-32 mb-8 animate-glow" />
+            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white mb-2 animate-slide-up" style={{animationFillMode: 'both'}}>TradeSync AI</h1>
+            <div className="w-48 h-1 bg-emerald-900 rounded-full mt-4 mb-6 overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-orange-500 via-white to-emerald-500 animate-width"></div>
+            </div>
+            <p className="text-xs md:text-sm font-mono text-emerald-400 tracking-widest uppercase animate-slide-up" style={{animationDelay: '0.4s', animationFillMode: 'both'}}>Initializing AP GovTech Network...</p>
+          </div>
+        </div>
+      );
+    };
+
+    const LoginScreen = ({ onLogin, onGoSignup, onGoForgot }) => {
+      const [email, setEmail] = useState(''); const [p, setP] = useState('');
+      
+      const handleGoogleDemo = () => alert("DEMO MODE: Google OAuth 2.0 requires active Client ID credentials to proceed.");
+
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 relative overflow-hidden">
+          <div className="bg-white p-8 md:p-10 rounded-3xl shadow-2xl w-full max-w-md z-10 animate-slide-up border border-slate-100">
+            <div className="flex flex-col items-center mb-6">
+              <ModernLogo className="w-20 h-20 mb-4 drop-shadow-lg animate-pop" />
+              <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Welcome Back</h1>
+            </div>
+            
+            <button type="button" onClick={handleGoogleDemo} className="w-full mb-6 flex items-center justify-center gap-3 bg-white border border-slate-200 text-slate-700 font-bold py-3.5 rounded-xl hover:bg-slate-50 transition-all shadow-sm">
+              <svg className="w-5 h-5" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+              Sign in with Google
+            </button>
+
+            <div className="flex items-center mb-6">
+              <div className="flex-1 border-t border-slate-200"></div>
+              <span className="px-3 text-[10px] text-slate-400 font-bold uppercase tracking-widest">OR EMAIL</span>
+              <div className="flex-1 border-t border-slate-200"></div>
+            </div>
+
+            <form onSubmit={(e) => { e.preventDefault(); onLogin(email, p); }} className="space-y-4">
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2">Email Address</label><input required type="email" value={email} onChange={e=>setEmail(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none font-medium" /></div>
+              <div>
+                <div className="flex justify-between items-center mb-2"><label className="block text-xs font-bold text-slate-500 uppercase">Password</label><button type="button" onClick={onGoForgot} className="text-xs font-bold text-orange-500 hover:text-orange-600 transition-colors">Forgot?</button></div>
+                <input required type="password" value={p} onChange={e=>setP(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none font-medium" />
+              </div>
+              <button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-orange-500/20 active:scale-95 flex justify-center items-center gap-2 transition-all mt-2">Secure Login <span className="text-white">→</span></button>
+            </form>
+            <div className="mt-8 text-center pt-6 border-t border-slate-100"><button onClick={onGoSignup} className="text-sm text-slate-500 font-bold hover:text-emerald-600 transition-colors">Don't have an account? <span className="text-emerald-600">Sign Up</span></button></div>
+          </div>
+        </div>
+      );
+    };
+
+    const SignupScreen = ({ onSignup, onGoLogin }) => {
+      const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [u, setU] = useState(''); const [p, setP] = useState(''); const [role, setRole] = useState('SUPERVISOR');
+      
+      const handleGoogleDemo = () => alert("DEMO MODE: Google OAuth 2.0 requires active Client ID credentials to proceed.");
+
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 relative overflow-hidden">
+          <div className="bg-white p-8 md:p-10 rounded-3xl shadow-2xl w-full max-w-md z-10 animate-slide-up border border-slate-100">
+            <h2 className="text-2xl font-extrabold text-slate-900 mb-2">Create Account</h2>
+            
+            <button type="button" onClick={handleGoogleDemo} className="w-full mb-6 mt-4 flex items-center justify-center gap-3 bg-white border border-slate-200 text-slate-700 font-bold py-3.5 rounded-xl hover:bg-slate-50 transition-all shadow-sm">
+              <svg className="w-5 h-5" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+              Sign up with Google
+            </button>
+
+            <div className="flex items-center mb-6">
+              <div className="flex-1 border-t border-slate-200"></div><span className="px-3 text-[10px] text-slate-400 font-bold uppercase tracking-widest">OR EMAIL</span><div className="flex-1 border-t border-slate-200"></div>
+            </div>
+
+            <form onSubmit={(e) => { e.preventDefault(); onSignup(name, email, u, p, role); }} className="space-y-4">
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Full Legal Name</label><input required value={name} onChange={e=>setName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 font-medium" /></div>
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email Address</label><input required type="email" value={email} onChange={e=>setEmail(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 font-medium" /></div>
+              <div className="flex gap-4">
+                <div className="flex-1"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">System Username</label><input required value={u} onChange={e=>setU(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 font-medium" /></div>
+                <div className="flex-1">
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Clearance Level</label>
+                  <select value={role} onChange={e=>setRole(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-slate-700">
+                    <option value="COMMISSIONER">Executive</option><option value="SUPERVISOR">Supervisor</option><option value="FIELD_OFFICER">Inspector</option>
+                  </select>
+                </div>
+              </div>
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label><input required type="password" value={p} onChange={e=>setP(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 font-medium" /></div>
+              <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-xl mt-4 shadow-lg active:scale-95 transition-all">Generate Secure Profile</button>
+            </form>
+            <div className="mt-6 text-center pt-4"><button onClick={onGoLogin} className="text-sm text-slate-500 font-medium hover:text-slate-900 transition-colors">Already have an account? Log in</button></div>
+          </div>
+        </div>
+      );
+    };
+
+    const ForgotPasswordScreen = ({ onGoLogin, API_URL }) => {
+      const [email, setEmail] = useState(''); const [status, setStatus] = useState('idle');
+      const handleReset = async (e) => {
+        e.preventDefault(); setStatus('loading');
+        try {
+          await fetch(`${API_URL}/api/auth/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+          setTimeout(() => setStatus('success'), 1000);
+        } catch(err) { alert("Server error. Please ensure backend is running."); setStatus('idle'); }
+      };
+
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+          <div className="bg-white p-8 md:p-10 rounded-3xl shadow-2xl w-full max-w-md animate-slide-up border border-slate-100">
+            {status === 'success' ? (
+              <div className="text-center animate-pop">
+                <div className="w-20 h-20 bg-emerald-100 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6"><svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"></path></svg></div>
+                <h2 className="text-2xl font-extrabold text-slate-900 mb-2">Check Your Inbox</h2>
+                <p className="text-sm text-slate-500 mb-8">If an account exists for <strong>{email}</strong>, we've sent a secure reset link.</p>
+                <button onClick={onGoLogin} className="w-full bg-slate-100 text-slate-700 font-bold py-4 rounded-xl hover:bg-slate-200 transition-all">Return to Login</button>
+              </div>
+            ) : (
+              <div>
+                <h2 className="text-2xl font-extrabold text-slate-900 mb-2">Reset Password</h2>
+                <p className="text-sm text-slate-500 mb-8">Enter your registered email address and we'll send you a link to reset your password.</p>
+                <form onSubmit={handleReset} className="space-y-6">
+                  <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2">Email Address</label><input required type="email" value={email} onChange={e=>setEmail(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none font-medium" /></div>
+                  <button type="submit" disabled={status === 'loading'} className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all">{status === 'loading' ? 'Sending...' : 'Send Reset Link'}</button>
+                </form>
+                <div className="mt-8 text-center pt-6 border-t border-slate-100"><button onClick={onGoLogin} className="text-sm text-slate-500 font-bold hover:text-emerald-600 transition-colors">← Back to Login</button></div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    const RegistrationSuccess = () => ( <div className="min-h-screen flex flex-col items-center justify-center bg-emerald-950 text-white p-4"><div className="w-24 h-24 bg-orange-500 rounded-full flex items-center justify-center mb-6 animate-pop shadow-[0_0_40px_rgba(249,115,22,0.4)]"><svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"></path></svg></div><h2 className="text-2xl font-bold tracking-tight animate-slide-up text-center">Profile Generated</h2></div> );
+    const LoadingScreen = ({ user }) => ( <div className="min-h-screen flex flex-col items-center justify-center bg-emerald-950 text-white p-4"><ModernLogo className="w-32 h-32 mb-8 animate-spin-slow opacity-90" /><h2 className="text-xl font-bold tracking-widest text-orange-400 uppercase">Establishing Link</h2><p className="text-emerald-200 mt-3 text-xs font-mono bg-emerald-900 px-3 py-1 rounded-md">Decrypting profile: {user.role}_TOKEN</p></div> );
+
+    // ==========================================
+    // THE DASHBOARD 
+    // ==========================================
+    const Dashboard = ({ user, users, onLogout, summaryData, outcomes, allTasks, logs, setLogs, refreshData, API_URL }) => {
+      
+      const [currentTab, setCurrentTab] = useState(user.role === 'COMMISSIONER' ? 'upload' : (user.role === 'SUPERVISOR' ? 'rec' : 'tasks'));
+      const [gstFile, setGstFile] = useState(null); const [gvmcFile, setGvmcFile] = useState(null); const [uploading, setUploading] = useState(false);
+      const [activeTaskUI, setActiveTaskUI] = useState({}); const [photoAttached, setPhotoAttached] = useState({}); const [gpsCaptured, setGpsCaptured] = useState({}); const [gpsLoading, setGpsLoading] = useState({}); 
+      const [confFilter, setConfFilter] = useState(0); const [toastMsg, setToastMsg] = useState(null);
+
+      const fieldOfficers = (users || []).filter(u => u.role === 'FIELD_OFFICER');
+      const myTasks = (allTasks || []).filter(t => t.assignedToUsername === user.username && t.status === "ASSIGNED");
+      const pendingReviews = (allTasks || []).filter(t => t.status === "AWAITING_SUPERVISOR");
+      const completedHistory = (allTasks || []).filter(t => t.status === "COMPLETED");
+
+      const showToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(null), 4000); };
+
+      if (user.role === 'COMMISSIONER' && !summaryData) return <div className="p-10 text-center font-bold text-slate-500">Connecting to Backend API...</div>;
+
+      const handleActualUpload = async () => {
+        if (!gstFile || !gvmcFile) return alert("Select BOTH CSV files!");
+        setUploading(true); setCurrentTab("logs"); setLogs(["[SYS] Uploading CSV files into RapidFuzz pipeline..."]);
+        const formData = new FormData(); formData.append("gst_file", gstFile); formData.append("gvmc_file", gvmcFile);
+        try {
+          const res = await fetch(`${API_URL}/api/engine/upload_and_run`, { method: "POST", body: formData });
+          if (res.ok) {
+            const data = await res.json();
+            setLogs(prev => [ ...prev, `[AI] Recon Sequence Complete. Found ${data.flagged} potential unregistered businesses.`, `[AI] Discrepancy Preview: ${data.preview.join(', ')}...`, "[SYS] Cases pushed to Supervisor Discovery Queue." ]);
+            refreshData(); 
+          } else { const err = await res.json(); alert("Error: " + err.detail); setCurrentTab("upload"); }
+        } catch(err) { alert("Server connection error."); setCurrentTab("upload"); }
+        setUploading(false);
+      };
+
+      const handleExportCSV = () => { window.open(`${API_URL}/api/data/export`, '_blank'); };
+      const handleApprove = async (id) => { await fetch(`${API_URL}/api/cases/approve/${id}`, { method: 'POST' }); showToast("Automated SMS Warning sent to Business Owner. 📱"); refreshData(); };
+      const handleAssign = async (outcomeId, officerUsername) => { if (!officerUsername) return; await fetch(`${API_URL}/api/cases/assign`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ outcome_id: outcomeId, officer_username: officerUsername }) }); refreshData(); };
+      const handlePhotoUpload = (caseId, event) => { const file = event.target.files[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => setPhotoAttached(prev => ({ ...prev, [caseId]: reader.result })); reader.readAsDataURL(file); } };
+      
+      const captureRealGPS = (caseId) => {
+        if (!navigator.geolocation) { alert("Geolocation is not supported by your browser"); return; }
+        setGpsLoading(prev => ({ ...prev, [caseId]: true })); showToast("Waiting for GPS permission... (30s timeout) ⏳");
+        navigator.geolocation.getCurrentPosition(
+          (position) => { setGpsCaptured(prev => ({ ...prev, [caseId]: `${position.coords.latitude.toFixed(6)}° N, ${position.coords.longitude.toFixed(6)}° E` })); setGpsLoading(prev => ({ ...prev, [caseId]: false })); showToast("GPS Locked Successfully! 📍"); },
+          (error) => { alert("Error getting location: " + error.message); setGpsLoading(prev => ({ ...prev, [caseId]: false })); },
+          { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
+        );
+      };
+
+      const handleSubmitReport = async (task) => {
+        if(!photoAttached[task.case_id] || !gpsCaptured[task.case_id]) { alert("ANTI-CORRUPTION PROTOCOL: You must attach a photo and capture GPS coordinates before submitting."); return; }
+        const outcomeVal = document.getElementById(`outcome-${task.case_id}`).value;
+        await fetch(`${API_URL}/api/field/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ case_id: task.case_id, ward: task.ward, outcome: outcomeVal, gps: gpsCaptured[task.case_id], photo_base64: photoAttached[task.case_id] }) });
+        showToast("Evidence secured! Sent to Supervisor. ✅"); refreshData(); 
+      };
+
+      const handleSupervisorVerify = async (case_id) => { await fetch(`${API_URL}/api/supervisor/verify/${case_id}`, { method: 'POST' }); showToast("Case Closed and Verified. Commissioner Stats Updated. 🔒"); refreshData(); }
+
+      const commTabs = [ { id: 'upload', label: 'DATA INGESTION' }, { id: 'overview', label: 'OVERVIEW' }, { id: 'ward', label: 'WARD METRICS' }, { id: 'history', label: 'CASE HISTORY' }, { id: 'logs', label: 'SYS LOGS' } ];
+      const supTabs = [ { id: 'rec', label: 'DISCOVERY QUEUE', badge: (outcomes || []).filter(o => o.status === "PENDING_APPROVAL").length }, { id: 'assign', label: 'ASSIGN TASKS' }, { id: 'review', label: 'FIELD REVIEWS', badge: pendingReviews.length }, { id: 'history', label: 'CASE HISTORY' } ];
+      const foTabs = [ { id: 'tasks', label: 'ACTIVE TASKS' }, { id: 'history', label: 'MY PROGRESS / HISTORY' } ];
+
+      return (
+        <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-slate-50">
+          {toastMsg && ( <div className="fixed top-20 right-4 md:bottom-10 md:top-auto md:right-10 bg-emerald-950 text-white px-6 py-4 rounded-2xl shadow-2xl z-50 animate-slide-up flex items-center gap-3 border border-emerald-800"><span className="text-xl">🔔</span><p className="font-bold text-sm tracking-wide">{toastMsg}</p></div> )}
+
+          {/* SIDEBARS & NAV */}
+          <aside className="hidden md:flex bg-emerald-950 flex-col w-72 shrink-0 z-20 text-slate-100 shadow-2xl">
+            <div className="p-6 border-b border-emerald-900 flex items-center gap-4"><ModernLogo className="w-10 h-10 drop-shadow-lg" /><div><h1 className="font-extrabold text-white text-lg tracking-tight">TradeSync AI</h1><p className="text-[10px] font-bold text-orange-400 uppercase tracking-widest mt-0.5">GovTech Portal</p></div></div>
+            <div className="p-5 border-b border-emerald-900 bg-emerald-900/30 flex justify-between items-center"><div><p className="text-sm font-bold text-white">{user.name}</p><p className="text-[10px] font-bold text-emerald-400 mt-1 uppercase tracking-wider">{user.role}</p></div><button onClick={onLogout} className="text-[10px] bg-emerald-900 text-emerald-200 font-bold px-3 py-2 rounded-lg hover:bg-orange-500 hover:text-white transition-colors">LOGOUT</button></div>
+            <nav className="flex flex-col p-4 space-y-2 flex-1 overflow-y-auto no-scrollbar">
+              {user.role === 'COMMISSIONER' && commTabs.map(tab => ( <button key={tab.id} onClick={() => setCurrentTab(tab.id)} className={`w-full text-left px-5 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between ${currentTab === tab.id ? "bg-orange-500 text-white shadow-lg" : "text-emerald-100 hover:bg-emerald-900"}`}><span>{tab.label}</span></button> ))}
+              {user.role === 'SUPERVISOR' && supTabs.map(tab => ( <button key={tab.id} onClick={() => setCurrentTab(tab.id)} className={`w-full text-left px-5 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between ${currentTab === tab.id ? "bg-orange-500 text-white shadow-lg" : "text-emerald-100 hover:bg-emerald-900"}`}><span>{tab.label}</span>{tab.badge > 0 && <span className="bg-white text-orange-600 px-2 py-0.5 rounded-full text-[9px]">{tab.badge}</span>}</button> ))}
+              {user.role === 'FIELD_OFFICER' && foTabs.map(tab => ( <button key={tab.id} onClick={() => setCurrentTab(tab.id)} className={`w-full text-left px-5 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between ${currentTab === tab.id ? "bg-orange-500 text-white shadow-lg" : "text-emerald-100 hover:bg-emerald-900"}`}>{tab.label}</button> ))}
+            </nav>
+          </aside>
+
+          <div className="md:hidden flex flex-col shrink-0 z-20 shadow-lg">
+            <div className="bg-emerald-950 p-4 flex justify-between items-center text-white"><div className="flex items-center gap-3"><ModernLogo className="w-8 h-8" /><h1 className="font-extrabold text-sm tracking-tight">TradeSync AI</h1></div><button onClick={onLogout} className="text-[10px] bg-emerald-900 text-emerald-200 font-bold px-3 py-2 rounded-lg">LOGOUT</button></div>
+            <div className="flex overflow-x-auto bg-white border-b border-slate-200 no-scrollbar">
+              {user.role === 'COMMISSIONER' && commTabs.map(tab => ( <button key={tab.id} onClick={() => setCurrentTab(tab.id)} className={`py-4 px-5 text-[10px] tracking-widest font-bold uppercase whitespace-nowrap transition-colors ${currentTab === tab.id ? "text-orange-600 border-b-2 border-orange-500 bg-orange-50" : "text-slate-500"}`}>{tab.label}</button> ))}
+              {user.role === 'SUPERVISOR' && supTabs.map(tab => ( <button key={tab.id} onClick={() => setCurrentTab(tab.id)} className={`py-4 px-5 text-[10px] tracking-widest font-bold uppercase whitespace-nowrap transition-colors flex items-center gap-1 ${currentTab === tab.id ? "text-orange-600 border-b-2 border-orange-500 bg-orange-50" : "text-slate-500"}`}>{tab.label} {tab.badge > 0 && <span className="bg-orange-500 text-white px-1.5 py-0.5 rounded-full text-[8px]">{tab.badge}</span>}</button> ))}
+              {user.role === 'FIELD_OFFICER' && foTabs.map(tab => ( <button key={tab.id} onClick={() => setCurrentTab(tab.id)} className={`py-4 px-5 text-[10px] tracking-widest font-bold uppercase whitespace-nowrap transition-colors flex items-center gap-1 ${currentTab === tab.id ? "text-orange-600 border-b-2 border-orange-500 bg-orange-50" : "text-slate-500"}`}>{tab.label}</button> ))}
+            </div>
+          </div>
+
+          <main className="flex-1 overflow-y-auto p-4 md:p-8 animate-slide-up bg-slate-50 relative">
+            <div className="max-w-6xl mx-auto pb-20 md:pb-0">
+              
+              {/* COMMISSIONER TABS */}
+              {user.role === 'COMMISSIONER' && currentTab === "upload" && (
+                <div className="space-y-6">
+                  <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+                    <div><h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">Data Ingestion Center</h2><p className="text-sm text-slate-500 font-medium mt-1">Upload regional civic datasets to the AI pipeline for processing.</p></div>
+                    <button onClick={handleExportCSV} className="w-full md:w-auto px-6 py-3 bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 rounded-xl items-center gap-2 hover:bg-emerald-100 transition-colors text-sm text-center">⬇ Download Audit Report</button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    <div className={`border-2 border-dashed ${gstFile ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 bg-white hover:border-orange-400'} rounded-2xl p-8 flex flex-col items-center justify-center text-center transition-colors cursor-pointer relative overflow-hidden`}><div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 text-2xl">📊</div><h3 className="font-bold text-slate-900">State GST Database</h3><p className={`text-xs mt-1 mb-4 font-bold ${gstFile ? 'text-emerald-600' : 'text-slate-500'}`}>{gstFile ? gstFile.name : "Requires .CSV format"}</p><input type="file" accept=".csv" onChange={(e) => setGstFile(e.target.files[0])} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" /><button className="px-5 py-2 bg-slate-100 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-lg pointer-events-none">{gstFile ? "File Selected ✓" : "Select File"}</button></div>
+                    <div className={`border-2 border-dashed ${gvmcFile ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 bg-white hover:border-orange-400'} rounded-2xl p-8 flex flex-col items-center justify-center text-center transition-colors cursor-pointer relative overflow-hidden`}><div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 text-2xl">🏢</div><h3 className="font-bold text-slate-900">GVMC Trade Licenses</h3><p className={`text-xs mt-1 mb-4 font-bold ${gvmcFile ? 'text-emerald-600' : 'text-slate-500'}`}>{gvmcFile ? gvmcFile.name : "Requires .CSV format"}</p><input type="file" accept=".csv" onChange={(e) => setGvmcFile(e.target.files[0])} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" /><button className="px-5 py-2 bg-slate-100 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-lg pointer-events-none">{gvmcFile ? "File Selected ✓" : "Select File"}</button></div>
+                  </div>
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mt-6"><button onClick={handleActualUpload} disabled={uploading} className="w-full px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg active:scale-95 text-sm uppercase tracking-wider disabled:opacity-50 transition-all">{uploading ? "Processing Files via AI..." : "Upload Datasets & Run Engine"}</button></div>
+                </div>
+              )}
+
+              {user.role === 'COMMISSIONER' && currentTab === "overview" && summaryData && (
+                <div className="space-y-6">
+                  <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900">Command Center</h2>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 border-t-4 border-t-orange-500"><p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Flagged Leaks</p><p className="text-2xl md:text-4xl font-black text-slate-900 mt-3">{summaryData.flagged}</p></div>
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 border-t-4 border-t-emerald-500"><p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Secured Profiles</p><p className="text-2xl md:text-4xl font-black text-emerald-600 mt-3">{summaryData.verified}</p></div>
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200"><p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Active Cases</p><p className="text-2xl md:text-3xl font-bold text-slate-800 mt-3">{summaryData.cases}</p></div>
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200"><p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Total Audits</p><p className="text-2xl md:text-3xl font-bold text-slate-800 mt-3">{summaryData.completed}</p></div>
+                  </div>
+                </div>
+              )}
+
+              {user.role === 'COMMISSIONER' && currentTab === "ward" && summaryData && (
+                <div className="space-y-6">
+                  <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900">Ward Telemetry & Analytics</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {(summaryData.ward_stats || []).map(w => (
+                      <div key={w.ward_no} className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
+                        <div className="flex justify-between items-center mb-6"><p className="font-extrabold text-slate-900 text-xl">Ward #{w.ward_no}</p><span className="text-[10px] px-3 py-1.5 bg-orange-50 text-orange-700 rounded-lg font-bold uppercase tracking-wide">Resolution: {w.flagged > 0 ? ((w.verified / w.flagged) * 100).toFixed(0) : 0}%</span></div>
+                        <div className="flex justify-between text-xs font-bold text-slate-500 mb-2"><span>Flagged: {w.flagged}</span><span className="text-emerald-600">Verified: {w.verified}</span></div>
+                        <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden"><div className="bg-gradient-to-r from-orange-400 to-emerald-500 h-full transition-all rounded-full" style={{width: `${w.flagged > 0 ? (w.verified/w.flagged)*100 : 0}%`}}></div></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {user.role === 'COMMISSIONER' && currentTab === "logs" && (
+                <div className="bg-emerald-950 rounded-2xl p-6 md:p-8 min-h-[500px] font-mono text-sm shadow-2xl border border-emerald-900">
+                  <div className="flex items-center gap-2 mb-6 pb-4 border-b border-emerald-800"><div className="w-3 h-3 rounded-full bg-orange-500"></div><div className="w-3 h-3 rounded-full bg-emerald-500"></div><div className="w-3 h-3 rounded-full bg-white"></div><span className="ml-2 text-emerald-300 text-xs font-bold tracking-widest">SYS_TERMINAL</span></div>
+                  {logs.length === 0 ? <p className="text-emerald-600 animate-pulse">Awaiting data ingestion protocol...</p> : logs.map((log, i) => <p key={i} className="mb-3 text-orange-400">{log}</p>)}
+                </div>
+              )}
+
+              {/* SUPERVISOR TABS */}
+              {user.role === 'SUPERVISOR' && currentTab === "rec" && (
+                <div className="space-y-6">
+                  <div className="flex flex-col md:flex-row justify-between md:items-end gap-4">
+                    <div><h2 className="text-2xl font-extrabold text-slate-900">AI Discovery Queue</h2></div>
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm w-full md:w-auto"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Min. Leak Confidence: {confFilter}%</label><input type="range" min="0" max="100" value={confFilter} onChange={e=>setConfFilter(Number(e.target.value))} className="w-full md:w-48 accent-orange-500" /></div>
+                  </div>
+                  <div className="grid gap-4">
+                    {outcomes.filter(o => o.status === "PENDING_APPROVAL" && (100 - o.conf) >= confFilter).map(rec => (
+                      <div key={rec.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div><div className="flex flex-wrap items-center gap-3 mb-1"><h3 className="font-extrabold text-slate-900 text-lg">{rec.name}</h3><span className="text-[10px] font-bold uppercase tracking-wider bg-orange-50 text-orange-600 px-2.5 py-1 rounded-md">Unlicensed Flag</span></div><p className="text-xs text-slate-500 font-medium mt-1">Ward {rec.ward} • Leak Confidence: <strong className="text-emerald-600">{Math.round(100 - rec.conf)}%</strong> • GSTIN: {rec.gstin}</p></div>
+                        <div className="w-full md:w-auto mt-2 md:mt-0"><button onClick={() => handleApprove(rec.id)} className="w-full md:w-auto px-6 py-3 bg-emerald-600 text-white text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-emerald-700 transition-colors shadow-lg active:scale-95">Approve Case</button></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {user.role === 'SUPERVISOR' && currentTab === "assign" && (
+                <div className="space-y-6">
+                  <h2 className="text-2xl font-extrabold text-slate-900">Deploy Officers</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {outcomes.filter(o => o.status === "APPROVED").map(rec => (
+                      <div key={rec.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
+                        <div><h3 className="font-extrabold text-slate-900 text-lg mb-1">{rec.name}</h3><p className="text-[10px] text-slate-400 font-mono mb-6 bg-slate-50 inline-block px-2 py-1 rounded">REF: {rec.case_id}</p><label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Available Units</label><select id={`sel-${rec.id}`} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 font-medium outline-none mb-4 focus:ring-2 focus:ring-orange-500"><option value="">Select Inspector...</option>{fieldOfficers.map(off => <option key={off.username} value={off.username}>{off.name}</option>)}</select></div>
+                        <button onClick={() => handleAssign(rec.id, document.getElementById(`sel-${rec.id}`).value)} className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white text-xs uppercase tracking-wider font-bold rounded-xl shadow-lg active:scale-95 transition-all">Dispatch Team</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {user.role === 'SUPERVISOR' && currentTab === "review" && (
+                <div className="space-y-6">
+                  <h2 className="text-2xl font-extrabold text-slate-900">Review Evidence (Anti-Corruption)</h2>
+                  {pendingReviews.length === 0 && ( <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center shadow-sm"><p className="text-slate-500 font-medium">All clear. No field reports awaiting review.</p></div> )}
+                  <div className="grid grid-cols-1 gap-6">
+                    {pendingReviews.map(task => (
+                      <div key={task.case_id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-6">
+                        <img src={task.report.photo_base64} alt="Evidence" className="w-full md:w-72 h-56 object-cover rounded-xl border border-slate-200 bg-slate-100 shadow-inner" />
+                        <div className="flex-1 flex flex-col justify-between">
+                          <div><div className="flex items-center gap-3 mb-2"><h3 className="font-extrabold text-slate-900 text-xl">{task.name}</h3><span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-600 px-2.5 py-1 rounded-md border border-emerald-100">Audit Ready</span></div><p className="text-sm text-slate-500 mb-6">Inspected by: <strong className="text-slate-800">{task.assignedToUsername}</strong></p><div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6"><div className="bg-slate-50 p-4 rounded-xl border border-slate-100"><p className="text-[10px] text-slate-400 font-bold uppercase mb-1 flex items-center gap-1">📍 GPS Coordinates</p><p className="text-sm font-mono text-slate-700 font-bold">{task.report.gps}</p></div><div className="bg-slate-50 p-4 rounded-xl border border-slate-100"><p className="text-[10px] text-slate-400 font-bold uppercase mb-1 flex items-center gap-1">📋 Officer Outcome</p><p className="text-sm font-bold text-orange-600">{task.report.outcome}</p></div></div></div>
+                          <button onClick={() => handleSupervisorVerify(task.case_id)} className="w-full md:w-auto px-8 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg active:scale-95 text-xs uppercase tracking-wider transition-all">Verify Evidence & Close Case</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* UNIVERSAL CASE HISTORY TAB */}
+              {currentTab === "history" && (
+                <div className="space-y-6">
+                  <h2 className="text-2xl font-extrabold text-slate-900">Case Audit History & Progress</h2>
+                  {(() => {
+                    const viewableHistory = user.role === 'FIELD_OFFICER' ? completedHistory.filter(t => t.assignedToUsername === user.username) : completedHistory;
+                    if (viewableHistory.length === 0) return ( <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center shadow-sm"><p className="text-slate-500 font-medium">No completed case histories available.</p></div> );
+                    return (
+                      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-x-auto">
+                        <table className="w-full text-left text-sm whitespace-nowrap"><thead className="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-widest font-bold border-b border-slate-200"><tr><th className="px-6 py-4">Case ID</th><th className="px-6 py-4">Business Name</th><th className="px-6 py-4">Ward</th><th className="px-6 py-4">Field Officer</th><th className="px-6 py-4">Resolution</th></tr></thead><tbody className="divide-y divide-slate-100 font-medium">{viewableHistory.map(task => ( <tr key={task.case_id} className="hover:bg-slate-50 transition-colors"><td className="px-6 py-4 font-mono text-xs text-slate-500">{task.case_id}</td><td className="px-6 py-4 text-slate-900 font-bold">{task.name}</td><td className="px-6 py-4 text-slate-600">Ward {task.ward}</td><td className="px-6 py-4 text-slate-600">{task.assignedToUsername}</td><td className="px-6 py-4 text-emerald-600 font-bold flex items-center gap-2">✅ {task.report?.outcome || 'Resolved'}</td></tr> ))}</tbody></table>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* FIELD OFFICER TAB */}
+              {user.role === 'FIELD_OFFICER' && currentTab === 'tasks' && (
+                <div className="space-y-6">
+                  <h2 className="text-2xl font-extrabold text-slate-900">Active Field Missions</h2>
+                  {myTasks.length === 0 ? ( <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center shadow-sm"><p className="text-slate-500 font-medium">All tasks cleared. Good work.</p></div> ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {myTasks.map(task => (
+                        <div key={task.case_id} className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm relative overflow-hidden group">
+                          <div className="absolute top-0 left-0 w-1.5 h-full bg-orange-500"></div>
+                          <div className="flex justify-between items-start mb-4"><span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">{task.case_id}</span></div>
+                          <h4 className="font-extrabold text-slate-900 text-xl mb-1">{task.name}</h4><p className="text-sm text-slate-500 font-medium">{task.address}</p>
+                          {!activeTaskUI[task.case_id] ? (
+                            <button onClick={() => setActiveTaskUI({...activeTaskUI, [task.case_id]: true})} className="w-full mt-8 py-3.5 bg-emerald-950 text-white text-xs uppercase tracking-widest font-bold rounded-xl shadow-lg active:scale-95 transition-transform hover:bg-emerald-900">Engage Target</button>
+                          ) : (
+                            <div className="mt-6 pt-5 border-t border-slate-100 animate-slide-up">
+                              {photoAttached[task.case_id] && ( <div className="mb-4"><p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Photo Evidence Secured</p><img src={photoAttached[task.case_id]} alt="Evidence" className="w-full h-40 object-cover rounded-xl border-2 border-emerald-400 shadow-sm" /></div> )}
+                              <div className="flex gap-2 mb-4">
+                                <div className={`flex-1 relative p-3 rounded-xl text-[10px] font-bold uppercase transition-colors text-center cursor-pointer flex flex-col justify-center items-center ${photoAttached[task.case_id] ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'}`}><span className="text-xl mb-1">{photoAttached[task.case_id] ? '🖼️' : '📷'}</span>{photoAttached[task.case_id] ? "Change Photo" : "Upload Photo"}<input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(task.case_id, e)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" /></div>
+                                <button onClick={() => captureRealGPS(task.case_id)} disabled={gpsLoading[task.case_id]} className={`flex-1 p-3 rounded-xl text-[10px] font-bold uppercase transition-colors flex flex-col justify-center items-center ${gpsCaptured[task.case_id] ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100'} ${gpsLoading[task.case_id] ? 'opacity-50 cursor-wait' : ''}`}><span className="text-xl mb-1">{gpsLoading[task.case_id] ? '⏳' : (gpsCaptured[task.case_id] ? '✅' : '📍')}</span>{gpsLoading[task.case_id] ? "Locating (30s max)..." : (gpsCaptured[task.case_id] ? "GPS Locked" : "Fetch GPS")}</button>
+                              </div>
+                              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Inspection Outcome</label><select id={`outcome-${task.case_id}`} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm font-medium text-slate-800 mb-5 outline-none focus:ring-2 focus:ring-orange-500"><option>Unlicensed (Penalty Issued)</option><option>Valid License Displayed</option><option>Premises Abandoned</option></select>
+                              <button onClick={() => handleSubmitReport(task)} className="w-full py-4 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs uppercase tracking-widest rounded-xl shadow-lg active:scale-95 transition-all">Encrypt & Submit to Supervisor</button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+            </div>
+          </main>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
